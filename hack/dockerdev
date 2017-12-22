@@ -24,16 +24,26 @@ show_help() {
     echo "     -f,--fresh                freshen the docker image from the repo"
     echo "     -h,--help                 this text"
     echo "     -i,--image   <imagename>  k2-tools docker image to use"
-    echo "                               default: quay.io/samsung_cnct/k2-tools"
+    echo "                               default: quay.io/samsung_cnct/kraken-tools"
     echo "     -m,--home <path>          specify the path to be used for \$HOME"
 }
 
+# Mac related support checks
 if [[ -z "$(which envsubst)" ]]; then
-    cat << EOF
+    cat <<< "
 OSX doesn't have envsubst by default. Please install gettext:
     brew install gettext
     brew link --force gettext
-EOF
+"
+    exit 1
+fi
+getopt -T > /dev/null
+if [[ $? -ne 4 ]]; then
+    cat <<< "
+OSX has a very old getopt. Please install a newer one:
+    brew install gnu-getopt
+    and follow the instructions.
+"
     exit 1
 fi
 
@@ -55,7 +65,7 @@ done
 
 MYHOME=${MYHOME:-${HOME}}
 CONFIGFILE="${CONFIGFILE:-${MYHOME}/.kraken/config.yaml}"
-IMAGE="${IMAGE:-quay.io/samsung_cnct/k2-tools:latest}"
+IMAGE="${IMAGE:-quay.io/samsung_cnct/kraken-tools:latest}"
 GITROOT="$(git rev-parse --show-toplevel)"
 
 # error if this isn't a k2 checkout
@@ -77,7 +87,7 @@ for d in $(sed -e 's/[^:]\+://' -e "s/^[ ]*\([\"']\)\(.*\)\1\$/\2/g" $CONFIGFILE
     p=$(envsubst <<< "$d")  # expand variables
     p=$(sed -e "s/^[\"']//" -e "s/[\"']$//" <<< "$p")
     # only add the map if the path is absolute, if it's not already in the string, and if it's a file or directory
-    if [[ $p == /* ]] && ! [[ ${MAPPINGS} == *${p}* ]] && ([[ -f $p ]] || [[ -d $p ]]); then
+    if [[ $p == /* ]] && ! [[ ${MAPPINGS} == *${p}:${p}* ]] && ([[ -f $p ]] || [[ -d $p ]]); then
         MAPPINGS="${MAPPINGS} -v ${p}:${p}"
     fi
 done
@@ -107,5 +117,5 @@ fi
 
 echo -e "Mappings:\n$(tr ' ' '\n' <<< "$MAPPINGS" | grep -e -v '-v' | sort)"
 echo ""
-echo "Running bash in k2 container. Use up.sh, down.sh, etc."
+echo "Running bash in k2 container. Use up, down, update."
 docker run ${MAPPINGS} -e HOME=${MYHOME} --rm=true -it ${IMAGE} /bin/bash --rcfile ${MYHOME}/.bashrc

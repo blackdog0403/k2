@@ -3,12 +3,13 @@
 # kubernetes_minor_versions
 # kraken_endpoint
 #
-- set_fact:
+- name: Set cluster fact
+  set_fact:
     cluster: "{{ a_cluster }}"
 
 - name: Set kubeconfig path
   set_fact:
-    kubeconfig: "{{ config_base | expanduser }}/{{ cluster.name }}/admin.kubeconfig"
+    kubeconfig: "{{ config_base }}/{{ cluster.name }}/admin.kubeconfig"
 
 - name: Execute appropriate kubectl per minor version
   set_fact:
@@ -21,8 +22,8 @@
     readiness_wait: "{{ kraken_config.readiness.wait | default(readiness_wait_default) }}"
 
 - name: Set Interval
-  set_fact: 
-    rep_interval: 20
+  set_fact:
+    rep_interval: "{{ readiness_retry_delay }}"
 
 - name: Setup repetitions
   set_fact:
@@ -30,7 +31,7 @@
 
 - name: Wait for api server response before continuing
   command: >
-    {{ kubectl }} --kubeconfig={{ kubeconfig | expanduser }} get nodes --no-headers=true
+    {{ kubectl }} --kubeconfig={{ kubeconfig }} get nodes --no-headers=true
   register: rbac_get_nodes_result
   until: rbac_get_nodes_result.stdout_lines | length >= 1 | int
   retries: "{{ repetitions | int }}"

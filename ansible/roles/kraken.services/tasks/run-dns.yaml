@@ -1,18 +1,12 @@
 ---
-- set_fact:
+- name: Set cluster fact
+  set_fact:
     cluster: "{{ a_cluster }}"
 
-- name: Look up and set k8s minor version for this cluster
+- name: Set kubectl and kubeconfig specific to this cluster
   set_fact:
-    kubernetes_minor_version: "{{ kubernetes_minor_versions[cluster.name] }}"
-
-- name: Execute appropriate kubectl per minor version
-  set_fact:
-    kubectl: "/opt/cnct/kubernetes/{{ kubernetes_minor_version }}/bin/kubectl"
-
-- set_fact:
-    kubeconfig: "{{ config_base | expanduser }}/{{ cluster.name }}/admin.kubeconfig"
-
+    kubectl: "/opt/cnct/kubernetes/{{ kubernetes_minor_versions[cluster.name] }}/bin/kubectl"
+    kubeconfig: "{{ config_base }}/{{ cluster.name }}/admin.kubeconfig"
 
 - name: Merge User DNS Config with Default DNS Config
   set_fact:
@@ -20,13 +14,13 @@
 
 - name: Make sure generated folder for services is there
   file:
-    path: "{{ config_base | expanduser }}/{{ cluster.name }}/services"
+    path: "{{ config_base }}/{{ cluster.name }}/services"
     state: directory
 
 - name: Generate kubedns RBAC policy file
   template:
     src: "{{ item }}"
-    dest: "{{ config_base | expanduser }}/{{ cluster.name }}/auth/rbac-dns-policy.yaml"
+    dest: "{{ config_base }}/{{ cluster.name }}/auth/rbac-dns-policy.yaml"
   with_first_found:
     - files:
       - "{{ kubernetes_minor_versions[ cluster.name ] }}/rbac-dns-policy.yaml.jinja2"
@@ -36,7 +30,7 @@
 - name: Create the DNS Service Deployment
   template:
     src: "{{ item }}"
-    dest: "{{ config_base | expanduser }}/{{ cluster.name }}/services/dns-deployment.yaml"
+    dest: "{{ config_base }}/{{ cluster.name }}/services/dns-deployment.yaml"
   with_first_found:
     - files:
       - "{{ kubernetes_minor_versions[ cluster.name ] }}/dns.yaml.jinja2"
@@ -44,11 +38,22 @@
 
 - name: Bootstrap kubedns RBAC policy
   command: >
-    {{ kubectl }} --kubeconfig={{ kubeconfig | expanduser }} apply -f {{ config_base | expanduser }}/{{ cluster.name }}/auth/rbac-dns-policy.yaml
+    {{ kubectl }} --kubeconfig={{ kubeconfig }} apply -f {{ config_base }}/{{ cluster.name }}/auth/rbac-dns-policy.yaml --record
   register: job_rbac_dns_results
   when: "cluster.kubeAuth.authz.rbac is defined"
 
+- name: DNS installed?
+  command: >
+    {{ kubectl }} --kubeconfig={{ kubeconfig }} get deployments --namespace={{ dns_config.namespace }} -o yaml
+  register: deployment_dns_installed
+  changed_when: false
+
 - name: Install DNS
   command: >
-      {{ kubectl }} --kubeconfig={{ kubeconfig | expanduser }} apply -f {{ config_base | expanduser }}/{{ cluster.name }}/services/dns-deployment.yaml --namespace={{ dns_config.namespace }}
+      {{ kubectl }} --kubeconfig={{ kubeconfig }} apply -f {{ config_base }}/{{ cluster.name }}/services/dns-deployment.yaml --namespace={{ dns_config.namespace }} --record
   register: deployment_dns_result
+  vars:
+    query: "[?spec.metadata.name=='{{ dns_config.k8sapp }}'] | [0].metadata.labels.version"
+    installed_version: "{{ deployment_dns_installed.stdout | from_yaml | json_query(query) }}"
+  when:
+    - installed_version != dns_config.version

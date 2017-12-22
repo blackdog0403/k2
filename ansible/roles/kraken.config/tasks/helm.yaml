@@ -1,0 +1,19 @@
+- name: Convert all dashes to underscores in cluster.name for Helm use
+  set_fact:
+    helm_cluster_name: "{{ cluster.name | replace('-','_') }}"
+
+- name: Set helm facts for cluster {{ cluster.name }}
+  set_fact:
+    helm_commands: "{{ { cluster.name : helm_command } | combine( helm_commands | default( {} ) ) }}"
+    helm_homes: "{{ { cluster.name : helm_home } | combine( helm_homes | default( {} ) )}}"
+  vars:
+    latest: "/opt/cnct/kubernetes/latest/bin/helm"
+    helm_command: "{{ latest }}"
+    helm_home: "{{ config_base }}/{{ cluster.name }}/.helm"
+
+- name: Create Helm home
+  file:
+    path: "{{ helm_home }}"
+    state: directory
+  vars:
+    helm_home: "{{ helm_homes[cluster.name] }}"

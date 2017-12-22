@@ -1,6 +1,13 @@
 ---
 kraken_action: up
 config_base: "~/.kraken"
-config_file_default: "{{ config_base | expanduser }}/config.yaml"
-config_file: "{{ config_path | expanduser | default(config_file_default) }}"
+config_file_default: "{{ config_base }}/config.yaml"
+config_file: "{{ config_path | default(config_file_default) }}"
 dryrun: false
+drunkensmee: "quay.io/samsung_cnct/drunkensmee-container:e0e0c05"
+dns_only: false
+distro: coreos
+rkt:
+  bin: /usr/bin/rkt
+  stage1: /usr/lib/rkt/stage1-images/stage1-fly.aci
+  version: v1.25.0

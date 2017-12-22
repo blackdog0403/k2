@@ -1,0 +1,7 @@
+---
+- name: Wait for all etcd clusters in the nodePool named {{ nodePool.name }} to form
+  include: wait-for-one-etcd.yaml
+  with_items:
+    - "{{ nodePool.etcdConfigs }}"
+  loop_control:
+    loop_var: etcdConfig

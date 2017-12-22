@@ -51,6 +51,15 @@
       "minItems": 1,
       "type": "array"
     },
+    "bastionConfigs": {
+      "title": "Bastion configurations",
+      "description": "A list of bastion configurations within the configuration file.",
+      "items": {
+        "$ref": "bastionConfig.json"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
     "kubeConfigs": {
       "title": "Kubernetes configurations",
       "description": "A list of Kubernetes configurations referenced within the configuration file.",
@@ -65,6 +74,15 @@
       "description": "A list of container configurations referenced within the configuration file.",
       "items": {
         "$ref": "containerConfig.json"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "autoScalingConfigs": {
+      "title": "AutoScaling configurations",
+      "description": "Describes the autoScaling configuration for a nodePool.",
+      "items": {
+        "$ref": "autoScalingConfig.json"
       },
       "minItems": 1,
       "type": "array"
@@ -96,6 +114,24 @@
       "minItems": 1,
       "type": "array"
     },
+    "dnsConfig" : {
+      "title": "DNS configurations",
+      "description": "A list of DNS configurations referenced within the configuration file.",
+      "items": {
+        "$ref": "dnsConfig.json"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "kubeAuth" : {
+      "title": "Kubernetes Authentication configurations",
+      "description": "A list of Kubernetes Authenications entries referenced within the configuration file.",
+      "items": {
+        "$ref": "kubeAuthConfig.json"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
     "keyPairs": {
       "title": "Key pairs",
       "description": "A list of key pairs referenced within the configuration file.",
@@ -104,10 +140,18 @@
       },
       "minItems": 1,
       "type": "array"
+    },
+    "schedulingConfigs": {
+      "title": "Pod Scheduling configuration.",
+      "description": "Taint information for pod scheduling.",
+      "items": {
+        "$ref": "schedulingConfig.json"
+      },
+      "type": "array"
     }
   },
 
   "//": "Nothing is required. The administrator can choose not to declare a definitions stanza.",
-
+  "additionalProperties": false,
   "type": "object"
 }

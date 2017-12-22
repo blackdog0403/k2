@@ -1,6 +1,7 @@
 generated/
 **/*.retry
 .idea
+.vscode
 **/.DS_Store
 *.tgz
 .env/
@@ -8,7 +9,10 @@ generated/
 .kraken/
 .rnd
 .srl
-.pyc
+*.pyc
 .terraform.d/
+
 clusters/
 ansible/cluster_changes.txt
+docs_bk/
+build/

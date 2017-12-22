@@ -28,19 +28,19 @@ definitions:
       options:
         containers:
           kubePolicyController:
-            version: v0.5.1
+            version: v1.0.0-rc4
             location: calico/kube-policy-controller
           etcd:
             version: v3.0.9
             location: quay.io/coreos/etcd
           calicoCni:
-            version: v1.4.2
+            version: v1.11.0
             location: calico/cni
           calicoNode:
-            version: v1.0.0-rc1
+            version: v2.6.3
             location: quay.io/calico/node
           flannel:
-            version: v0.6.1
+            version: v0.9.1
             location: quay.io/coreos/flannel
         network:
           network: 10.128.0.0/10
@@ -56,13 +56,13 @@ definitions:
       options:
         containers:
           calicoCni:
-            version: v1.8.3
+            version: v1.10.0
             location: quay.io/calico/cni
           calicoNode:
-            version: v1.1.3
+            version: v2.4.1
             location: quay.io/calico/node
           flannel:
-            version: v0.7.1
+            version: v0.8.0
             location: quay.io/coreos/flannel
         network:
           network: 10.128.0.0/10
@@ -79,6 +79,7 @@ definitions:
         default: *defaultCanalFabric
         versions:
           v1.6: *defaultCanalFabric16
+          v1.7: *defaultCanalFabric16
     - &defaultWeaveFabric
       name: defaultWeaveFabric
       kind: fabric
@@ -86,10 +87,10 @@ definitions:
       options:
         containers:
           weave:
-            version: 1.9.8
+            version: 2.1.1
             location: weaveworks/weave-kube
           weave_npc:
-            version: 1.9.8
+            version: 2.1.1
             location: weaveworks/weave-npc
         network:
           network: 10.128.0.0/10
@@ -117,11 +118,12 @@ definitions:
         default: *defaultWeaveFabric
         versions:
           v1.6: *defaultWeaveFabric16
+          v1.7: *defaultWeaveFabric16
   kubeConfigs:
     - &defaultKube
       name: defaultKube
       kind: kubernetes
-      version: v1.6.6
+      version: v1.7.8-gke.0
       hyperkubeLocation: gcr.io/google_containers/hyperkube
   containerConfigs:
     - &defaultDocker
@@ -129,6 +131,11 @@ definitions:
       kind: container
       runtime: docker
       type: distro
+  autoScalingConfigs:
+    - &defaultAutoScaling
+      minNodes: 3
+      maxNodes: 10
+      enabled: false
   nodeConfigs:
     - &defaultGKEClusterNode
       name: defaultGKEClusterNode
@@ -158,7 +165,7 @@ definitions:
       kind: keyPair
       providerConfig:
         serviceAccount: patrickrobot@k8s-work.iam.gserviceaccount.com
-        serviceAccountKeyFile:  ~/.config/gcloud/patrickRobot.json
+        serviceAccountKeyFile:  $HOME/.config/gcloud/patrickRobot.json
   kubeAuth:
    - &defaultKubeAuth
       authz: {}
@@ -167,17 +174,16 @@ definitions:
           -
             password: "ChangeMe"
             user: "admin"
+        cert:
+          -
+            user: "admin"
         default_basic_user: "admin"
    - &rbacKubeAuth
       authz:
-        rbac:
-          # super_user is required until kubernetes 1.5 is no longer supported by k2.
-          # It is not used by kubernetes 1.6 or later.
-          super_user: "placeholder"
+        rbac: {}
       authn:
-        basic:
+        cert:
           -
-            password: "ChangeMe"
             user: "admin"
             group: "system:masters"
         default_basic_user: "admin"
@@ -190,10 +196,10 @@ definitions:
       project: k8s-work
       keypair: *defaultGKEKeyPair
       zone:
-        primaryZone: us-central1-a
+        primaryZone: us-east1-b
         additionalZones:
-          - us-central1-b
-          - us-central1-c
+          - us-east1-c
+          - us-east1-d
 
 # This is the core of the new configuration.
 
@@ -210,14 +216,15 @@ deployment:
           count: 2
           kubeConfig: *defaultKube
           nodeConfig: *defaultGKEClusterNode
+          autoScalingConfig: *defaultAutoScaling
         - name: othernodes
           count: 2
           kubeConfig: *defaultKube
           nodeConfig: *defaultGKEOtherNode
+          autoScalingConfig: *defaultAutoScaling
       fabricConfig: *kubeVersionedFabric
       helmConfig: *defaultHelm
       dnsConfig: *defaultDns
-      helmOverride:
   readiness:
     type: exact
     value: 0

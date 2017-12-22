@@ -1,17 +1,15 @@
 ---
-  - set_fact:
+  - name: Set cluster fact
+    set_fact:
       cluster: "{{ a_cluster }}"
 
   - name: Make sure generated folder for cluster is there
     file:
-      path: "{{ config_base | expanduser }}/{{ cluster.name }}"
+      path: "{{ config_base }}/{{ cluster.name }}"
       state: directory
 
-  - name: Touch cluster.status.lock file in config_base
-    file:
-      path: "{{ config_base | expanduser }}/{{ cluster.name }}/cluster.status.lock"
-      state: touch
+  - name: Log when the cluster is created on cluster.status.lock file
+    copy:
+      content: "{{ cluster.name }} cluster is successfully created at: {{ ansible_date_time.iso8601 }}"
+      dest: "{{ config_base }}/{{ cluster.name }}/cluster.status.lock"
       mode: "u=rw,g=r,o=r"
-
-  - name: Loggin when the cluster is created on cluster.status.lock file
-    shell: echo "{{ cluster.name }} cluster is successfully created at:" "$(date)"> "{{ config_base | expanduser }}/{{ cluster.name }}/cluster.status.lock"

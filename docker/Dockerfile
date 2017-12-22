@@ -1,4 +1,4 @@
-FROM quay.io/samsung_cnct/k2-tools:latest
+FROM quay.io/samsung_cnct/kraken-tools:latest
 
 ARG K2_REPO=https://github.com/samsung-cnct/k2.git
 ARG K2_BRANCH=master
@@ -11,4 +11,4 @@ RUN 	apk update && \
        apk del git
 
 WORKDIR "/kraken"
-CMD ["./up.sh"]
+CMD ["./bin/up.sh"]

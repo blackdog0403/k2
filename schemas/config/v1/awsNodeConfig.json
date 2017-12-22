@@ -4,15 +4,15 @@
   "$$target": "awsNodeConfig.json",
   "title": "AWS Node Configuration",
   "description": "Describes node configuration, some of which is specific to AWS (e.g. [instance types](https://aws.amazon.com/ec2/instance-types/)).",
-
+  
   "properties": {
     "name": {
       "description": "Name of node for use by k2.",
       "type": "string"
     },
     "kind": {
-      "description": "Type of config this is.",
-      "enum": [ "node" ],
+      "description": "Type of node",
+      "enum": ["node"],
       "type": "string"
     },
     "mounts": {
@@ -20,13 +20,22 @@
       "items": { "$ref": "awsNodeMountConfig.json" },
       "type": "array"
     },
-    "providerConfig": { "$ref": "awsNodeProviderConfig.json" }
+   "keypair": {
+     "type": "string"
+   },
+   "providerConfig": {
+      "$ref": "awsNodeProviderConfig.json"
+    },
+    "taints": {
+      "description": "List of AWS taints to associate with the kubernetes node",
+      "items": { "$ref": "kubeNodeTaint.json" },
+      "type": "array"
+    }
   },
-
   "required": [
     "name",
     "providerConfig"
   ],
-
+  "additionalProperties": false,
   "type": "object"
 }

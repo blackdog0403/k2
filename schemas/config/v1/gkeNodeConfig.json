@@ -15,13 +15,20 @@
       "enum": [ "node" ],
       "type": "string"
     },
-    "providerConfig": { "$ref": "gkeNodeProviderConfig.json" }
+    "providerConfig": {
+      "$ref": "gkeNodeProviderConfig.json"
+    },
+    "taints": {
+      "description": "List of GKE taints to associate with the kubernetes node",
+      "items": { "$ref": "kubeNodeTaint.json" },
+      "type": "array"
+    }
   },
 
   "required": [
     "name",
     "providerConfig"
   ],
-
+  "additionalProperties": false,
   "type": "object"
 }

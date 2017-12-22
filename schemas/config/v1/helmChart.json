@@ -10,8 +10,16 @@
       "description": "Friendly name for the chart.",
       "type": "string"
     },
+    "namespace": {
+      "description": "Namespace of the chart.",
+      "type": "string"
+    },
     "repo": {
       "description": "Repository to pull this chart from - referenced by helm application.",
+      "type": "string"
+    },
+    "registry": {
+      "description": "Registry to pull this chart from - referenced by helm application.",
       "type": "string"
     },
     "chart": {
@@ -26,10 +34,16 @@
 
   "required": [
     "name",
-    "repo",
     "chart",
     "version"
   ],
 
+  "oneOf": [
+      { "required":
+          [ "repo" ] },
+      { "required":
+          [ "registry" ] }
+  ],
+  "additionalProperties": false,
   "type": "object"
 }

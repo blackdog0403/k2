@@ -2,7 +2,7 @@
 #
 # Expects:
 #    cluster
-#    
+#
 #    kraken_config
 #    kubernetes_minor_versions
 #
@@ -29,11 +29,12 @@
   set_fact:
     readiness_wait: "{{ kraken_config.readiness.wait | default(600) }}"
 
-- set_fact:
+- name: Set cluster fact
+  set_fact:
     cluster: "{{ a_cluster }}"
 
 - name: Set kubeconfig path
   set_fact:
-    kubeconfig: "{{ config_base | expanduser }}/{{ cluster.name }}/admin.kubeconfig"
+    kubeconfig: "{{ config_base }}/{{ cluster.name }}/admin.kubeconfig"
 
 - include: do-wait.yaml

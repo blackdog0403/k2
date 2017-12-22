@@ -1,10 +1,36 @@
 ---
-
-- include: up.yaml
-
 - hosts: localhost
 
   roles:
     - {
+        role: 'kraken.config',
+        tags: [ 'always', 'config_only' ]
+      }
+    - {
+        role: 'roles/kraken.cluster_common',
+        tags: [ 'assembler', 'provider', 'ssh', 'readiness', 'services', 'all', 'dryrun' ]
+      }
+    - {
+        role: 'roles/kraken.nodePool/kraken.nodePool.selector',
+        tags: [ 'assembler', 'provider', 'ssh', 'readiness', 'services', 'all', 'dryrun' ]
+      }
+    - {
+        role: 'roles/kraken.assembler',
+        tags: [ 'assembler', 'provider', 'ssh', 'readiness', 'services', 'all', 'dryrun' ]
+      }
+    - {
+        role: 'roles/kraken.provider/kraken.provider.selector',
+        tags: [ 'provider', 'ssh', 'readiness', 'services', 'all', 'dryrun']
+      }
+    - {
         role: '{{ playbook_dir }}/roles/kraken.update/kraken.update.selector',
+      }
+    - {
+        role: 'roles/kraken.readiness',
+        wait_for_all_hosts: true,
+        tags: [ 'readiness', 'services', 'all', 'ssh_only' ]
+      }
+    - {
+        role: 'roles/kraken.ssh/kraken.ssh.selector',
+        tags: [ 'ssh', 'all', 'dryrun' ,'ssh_only' ]
       }

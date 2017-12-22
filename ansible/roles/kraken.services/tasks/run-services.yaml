@@ -1,51 +1,62 @@
 ---
-
-- set_fact:
+- name: set cluster fact
+  set_fact:
     cluster: "{{ a_cluster }}"
 
-- name: Look up and set k8s minor version for this cluster
+- name: set facts for run-services
   set_fact:
-    kubernetes_minor_version: "{{ kubernetes_minor_versions[cluster.name] }}"
-
-- name: Execute appropriate kubectl per minor version
-  set_fact:
-    kubectl: "/opt/cnct/kubernetes/{{ kubernetes_minor_version }}/bin/kubectl"
-
-- name: Execute appropriate helm per minor version
-  set_fact:
-    helm_command: "/opt/cnct/kubernetes/{{ kubernetes_minor_version }}/bin/helm"
-  when: helm_availabilities[cluster.name] == true
-
-- name: In case of helm not being available, if override was specified, override to latest helm
-  set_fact:
-    helm_command: "/opt/cnct/kubernetes/latest/bin/helm"
-  when: (helm_availabilities[cluster.name] == false) and (helm_overrides[cluster.name] == true)
-
-- set_fact:
-    cluster_services: "{{ cluster.helmConfig.charts | default([]) }}"
+    cluster_registries: "{{ cluster.helmConfig.registries | default([]) }}"
     cluster_repos: "{{ cluster.helmConfig.repos | default([]) }}"
-    kubeconfig: "{{ config_base | expanduser }}/{{ cluster.name }}/admin.kubeconfig"
-    helm_home: "{{ config_base | expanduser }}/{{ cluster.name }}/.helm"
+    cluster_services: "{{ cluster.helmConfig.charts | default([]) }}"
+    helm_command: "{{ helm_commands[cluster.name] }}"
+    helm_home: "{{ config_base }}/{{ cluster.name }}/.helm"
+    kubeconfig: "{{ config_base }}/{{ cluster.name }}/admin.kubeconfig"
+    kubectl: "{{ kubectl_commands[cluster.name] }}"
 
-- name: Create Helm home
-  file:
-    path: "{{ helm_home }}"
-    state: directory
+- name: Set dependent facts
+  set_fact:
+    helm_path: "{{ helm_command | dirname }}"
 
 - name: create debug helm command string
   set_fact:
     helm_command: "{{ helm_command }} --debug"
-  when: (cluster.helmConfig.debug is defined) and (cluster.helmConfig.debug == True) and (helm_command is defined)
+  when:
+    - cluster.helmConfig.debug is defined
+    - cluster.helmConfig.debug == True
+    - helm_command is defined
+
+- name: create kraken namespace
+  command: >
+    {{ kubectl }} --kubeconfig={{ kubeconfig }} apply -f  "{{ item }}" --record
+  with_first_found:
+    - files:
+      - kraken-namespace.yaml
+  when: helm_command is defined
+
+- name: setup rbac and serviceaccount for tiller
+  command: >
+    {{ kubectl }} --kubeconfig={{ kubeconfig }} apply -f "{{ item }}" --record
+  with_first_found:
+    - files:
+      - helm-rbac-config.yaml
+      skip: true
+  when: helm_command is defined
 
 - name: create helm init command string
   set_fact:
-    helm_init_command: "{{ helm_command }} init"
-  when: ((tiller_image is undefined) or (tiller_image is none) or (tiller_image | trim == '')) and (helm_command is defined)
+    helm_init_command: "{{ helm_command }} init --service-account tiller --tiller-namespace kraken "
+  when:
+    - ((tiller_image is undefined) or (tiller_image is none) or (tiller_image | trim == ''))
+    - helm_command is defined
 
 - name: create helm init command string
   set_fact:
-    helm_init_command: "{{ helm_command }} init --tiller-image {{ tiller_image }}"
-  when: (tiller_image is defined) and (tiller_image is not none) and (tiller_image | trim != '') and (helm_command is defined)
+    helm_init_command: "{{ helm_command }} init --tiller-image {{ tiller_image }} --service-account tiller --tiller-namespace kraken "
+  when:
+    - tiller_image is defined
+    - tiller_image is not none
+    - tiller_image | trim != ''
+    - helm_command is defined
 
 - name: Init helm dry-run
   command: >
@@ -53,8 +64,12 @@
   environment:
     KUBECONFIG: "{{ kubeconfig }}"
     HELM_HOME: "{{ helm_home }}"
+    PATH: "{{ helm_path }}:{{ ansible_env.PATH }}"
   register: init_dry_out
-  when: (cluster.helmConfig.debug is defined) and (cluster.helmConfig.debug == True) and (helm_command is defined)
+  when:
+    - cluster.helmConfig.debug is defined
+    - cluster.helmConfig.debug == True
+    - helm_command is defined
 
 - name: Init helm
   command: >
@@ -62,12 +77,13 @@
   environment:
     KUBECONFIG: "{{ kubeconfig }}"
     HELM_HOME: "{{ helm_home }}"
+    PATH: "{{ helm_path }}:{{ ansible_env.PATH }}"
   retries: 60
   delay: 1
   when: helm_command is defined
 
 - name: Wait for tiller to be ready
-  command: "{{ kubectl }} --kubeconfig={{ kubeconfig | expanduser }} --namespace=kube-system get deploy tiller-deploy -o json"
+  command: "{{ kubectl }} --kubeconfig={{ kubeconfig }} --namespace=kraken get deploy tiller-deploy -o json"
   register: output
   until: (output | succeeded) and ((output.stdout | from_json).status.availableReplicas | default(0)) > 0
   retries: 600
@@ -81,8 +97,11 @@
   environment:
     KUBECONFIG: "{{ kubeconfig }}"
     HELM_HOME: "{{ helm_home }}"
+    PATH: "{{ helm_path }}:{{ ansible_env.PATH }}"
   with_items: "{{ cluster_repos }}"
-  when: (cluster_repos is defined) and (helm_command is defined)
+  when:
+    - cluster_repos is defined
+    - helm_command is defined
   ignore_errors: yes
   failed_when: false
 
@@ -92,39 +111,113 @@
   environment:
     KUBECONFIG: "{{ kubeconfig }}"
     HELM_HOME: "{{ helm_home }}"
+    PATH: "{{ helm_path }}:{{ ansible_env.PATH }}"
   with_items: "{{ cluster_repos }}"
-  when: cluster_repos is defined and (helm_command is defined)
+  when:
+    - cluster_repos is defined
+    - helm_command is defined
 
-- name: Save all config values to files
+- name: Process helm registries
+  command: >
+    {{ helm_command }} registry login -u {{ item.username }} -p {{ item.password }} {{ item.name }}
+  environment:
+    KUBECONFIG: "{{ kubeconfig }}"
+    HELM_HOME: "{{ helm_home }}"
+    PATH: "{{ helm_path }}:{{ ansible_env.PATH }}"
+  with_items: "{{ cluster_registries }}"
+  when: cluster_registries is defined and (helm_command is defined)
+
+- name: Save config values to files for repo charts
   template: src=service-values.yaml.jinja2
-    dest="{{ config_base | expanduser }}/{{ cluster.name }}/{{ item.repo }}-{{ item.name }}.helmvalues"
+    dest="{{ config_base }}/{{ cluster.name }}/{{ item.repo }}-{{ item.name }}.helmvalues"
   with_items: "{{ cluster_services }}"
-  when: cluster_services is defined
+  when:
+    - cluster_services is defined
+    - item.repo is defined
+
+- name: Save config values to files for registry charts
+  template: src=service-values.yaml.jinja2
+    dest="{{ config_base }}/{{ cluster.name }}/{{ item.registry }}-{{ item.name }}.helmvalues"
+  with_items: "{{ cluster_services }}"
+  when:
+    - cluster_services is defined
+    - item.registry is defined
 
 - name: Install charts dry-run
   command: >
     {{ helm_command }} install {{ item.repo }}/{{ item.chart }}
+      --tiller-namespace kraken
       --name {{ item.name }}
       --version {{ item.version }}
       --namespace {{ item.namespace | default('default') }}
-      --values {{ config_base | expanduser }}/{{ cluster.name }}/{{ item.repo }}-{{ item.name }}.helmvalues
+      --values {{ config_base }}/{{ cluster.name }}/{{ item.repo }}-{{ item.name | replace('/','_') }}.helmvalues
       --dry-run
   environment:
     KUBECONFIG: "{{ kubeconfig }}"
     HELM_HOME: "{{ helm_home }}"
+    PATH: "{{ helm_path }}:{{ ansible_env.PATH }}"
   with_items: "{{ cluster_services }}"
   register: install_dry_out
-  when: (cluster_services is defined) and (cluster.helmConfig.debug is defined) and (cluster.helmConfig.debug == True) and (helm_command is defined)
+  when:
+    - cluster_services is defined
+    - cluster.helmConfig.debug is defined
+    - cluster.helmConfig.debug == True
+    - helm_command is defined
 
-- name: Install charts
+- name: Install charts from repo
   command: >
     {{ helm_command }} install {{ item.repo }}/{{ item.chart }}
+      --tiller-namespace kraken
       --name {{ item.name }}
       --version {{ item.version }}
       --namespace {{ item.namespace | default('default') }}
-      --values {{ config_base | expanduser }}/{{ cluster.name }}/{{ item.repo }}-{{ item.name }}.helmvalues
+      --values {{ config_base }}/{{ cluster.name }}/{{ item.repo }}-{{ item.name }}.helmvalues
   environment:
     KUBECONFIG: "{{ kubeconfig }}"
     HELM_HOME: "{{ helm_home }}"
+    PATH: "{{ helm_path }}:{{ ansible_env.PATH }}"
   with_items: "{{ cluster_services }}"
-  when: (cluster_services is defined) and (helm_command is defined)
+  when:
+    - cluster_services is defined
+    - helm_command is defined
+    - item.repo is defined
+
+- name: Install charts from registry
+  command: >
+    {{ helm_command }} registry install {{ item.registry }}/{{ item.chart }}@{{ item.version }}  --
+      --tiller-namespace kraken
+      --name {{ item.name }}
+      --namespace {{ item.namespace | default('default') }}
+      --values {{ config_base }}/{{ cluster.name }}/{{ item.registry }}-{{ item.name | replace('/','_') }}.helmvalues
+  environment:
+    KUBECONFIG: "{{ kubeconfig }}"
+    HELM_HOME: "{{ helm_home }}"
+    PATH: "{{ helm_path }}:{{ ansible_env.PATH }}"
+  with_items: "{{ cluster_services }}"
+  when:
+    - cluster_services is defined
+    - helm_command is defined
+    - item.registry is defined
+
+- name: Set cluster-autoscaling version
+  set_fact:
+    caTags: {
+             v1.8: v1.0.1,
+             v1.7: v0.6.0,
+             v1.6: v0.5.0
+            }
+
+- name: Install cluster-autoscaling addon
+  command: >
+    {{ helm_command }} install stable/cluster-autoscaler --name {{ item.name | lower }}-autoscaling --set "autoscalingGroups[0].name={{ cluster.name }}_{{ item.name }}_asg,autoscalingGroups[0].maxSize={{ item.autoScalingConfig.maxNodes }},autoscalingGroups[0].minSize={{ item.autoScalingConfig.minNodes }},autoscalingGroups[0].cloudProvider=aws,image.tag={{ caTags[kubernetes_minor_versions[cluster.name]] }}" --tiller-namespace kraken
+      --namespace kube-system
+  environment:
+    KUBECONFIG: "{{ kubeconfig }}"
+    HELM_HOME: "{{ helm_home }}"
+    PATH: "{{ helm_path }}:{{ ansible_env.PATH }}"
+  with_items:
+    - "{{ cluster.nodePools }}"
+  when:
+    - item.autoScalingConfig is defined
+    - item.autoScalingConfig.enabled
+    - cluster.providerConfig.provider == 'aws'

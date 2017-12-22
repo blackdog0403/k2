@@ -1,0 +1,29 @@
+---
+- name: Get terraform modules
+  command: >
+    terraform get -no-color -update=true
+  args:
+    chdir: "{{ config_base }}/{{ cluster.name }}"
+
+- name: Plan terraform configuration for current state of etcd
+  command: >
+    terraform plan {{ tf_etcd_targets }} -input=false -no-color -out={{ config_base }}/{{ cluster.name }}/tf_plan
+  args:
+    chdir: "{{ config_base }}/{{ cluster.name }}"
+  register: tf_etcd_plan_result
+
+- name: Dump the terraform plan
+  debug:
+    var: tf_etcd_plan_result
+    verbosity: 0
+
+- name: Apply terraform configuration to current state of etcd
+  command: >
+    terraform apply {{ tf_etcd_targets }} -input=false -no-color {{ config_base }}/{{ cluster.name }}/tf_plan
+  args:
+    chdir: "{{ config_base }}/{{ cluster.name }}"
+  register: tf_etcd_apply_result
+  until: tf_etcd_apply_result | succeeded
+  retries: "{{ tf_retries }}"
+  delay: "{{ tf_delay }}"
+  when: not (dryrun | bool)

@@ -1,0 +1,81 @@
+---
+- name: Set cluster fact
+  set_fact:
+    cluster: "{{ a_cluster }}"
+
+- name: Verify all clusters in the clusters list have names
+  fail:
+    msg: "Make sure that all 'clusters.name' are defined in {{ config_file }}"
+  when: cluster.name | is_empty
+
+# we have these in two parts since it would make it easier to maintain and scale over time and easy to change.
+- name: Ensure each nodePool item corresponds at least one of the node roles - etcd, master, node, or bastion
+  fail:
+    msg: "({{ i.0.name }}, {{ i.1.name }}) corresponds to no fully defined node role"
+  with_subelements:
+    - "{{ kraken_config.clusters }}"
+    - nodePools
+  loop_control:
+    loop_var: i
+  when:
+    - i.1.etcdConfigs is undefined
+    - (i.1.apiServerConfig is undefined or (i.1.apiServerConfig is defined and i.1.kubeConfig is undefined))
+    - i.1.kubeConfig is undefined
+    - i.1.bastionConfig is undefined
+
+- name: Ensure each nodePool item corresponds to one and only one of the node roles (except apiserver) - etcd, master, node, or bastion
+  fail:
+    msg: "({{ i.0.name }}, {{ i.1.name }}) corresponds to more than one node role"
+  with_subelements:
+    - "{{ kraken_config.clusters }}"
+    - nodePools
+  loop_control:
+    loop_var: i
+  when:
+    (i.1.etcdConfigs is defined and (i.1.kubeConfig is defined or i.1.bastionConfig is defined)) or
+    (i.1.apiServerConfig is defined and i.1.bastionConfig is defined) or
+    (i.1.kubeConfig is defined and i.1.bastionConfig is defined)
+
+
+- name: Verify cloud provider is supported
+  fail:
+    msg: |
+      {{ cluster.providerConfig.provider }} is not a supported cloud provider. Please file an issue at
+      https://github.com/samsung-cnct/k2/issues to request support.
+  when: cluster.providerConfig.provider not in ['aws', 'gke']
+
+- name: Verify kubeAuth is defined
+  fail:
+    msg: "Make sure that there is a 'kubeAuth' stanza in {{ config_file }}"
+  when: cluster.kubeAuth | is_empty
+
+- name: Set the provider type
+  set_fact:
+    kraken_config: "{{ kraken_config | combine({'providerConfig': {'type': 'cloudinit' }}, recursive=True) }}"
+  when: cluster.providerConfig.type | is_empty
+
+- name: Set kubernetes minor versions for each aws or gke cluster
+  set_fact:
+    kubernetes_minor_versions: "{{ kubernetes_minor_versions | default({}) |combine
+      (
+        { cluster.name: masterVersion[0:(masterVersion.find('.', 3 ))] }
+      )
+     }}"
+  with_items:
+    - "{{ cluster.nodePools }}"
+  when: (item.apiServerConfig is defined) or (cluster.providerConfig.provider == 'gke')
+  vars:
+    masterVersion: "{{ item.kubeConfig.version }}"
+
+- name: Look up and set k8s minor version for this cluster
+  set_fact:
+    kubernetes_minor_version: "{{ kubernetes_minor_versions[cluster.name] }}"
+
+- include: helm.yaml
+- include: kubectl.yaml
+
+- include: set-oidc-info.yaml
+  when: cluster.kubeAuth.authn.oidc is defined
+
+- include: check-update.yaml
+  when: kraken_action == 'update'

@@ -1,4 +1,28 @@
-endpoint: {% if etcd.etcdConfig.ssl == true %}https{% else %}http{% endif %}://{{etcd.name}}.{{cluster.name}}.internal:{{etcd.etcdConfig.clientPorts[0]}}
+{% if node.osConfig.locksmith is defined %}
+{%   set locksmith = node.osConfig.locksmith %}
+{%   if locksmith.group is defined %}
+group: {{ locksmith.group }}
+{%   else %}
+group: {{ node.name }}
+{%   endif %}
+
+{%   if locksmith.windowStart is defined %}
+window_start: {{ locksmith.windowStart }}
+{%   endif %}
+{%   if locksmith.windowLength is defined %}
+window_length: {{ locksmith.windowLength }}
+{%   endif %}
+
+{%   if locksmith.etcdConfig is defined %}
+{%     set etcdConfig = locksmith.etcdConfig %}
+endpoint: {% if etcdConfig.ssl == true %}https{% else %}http{% endif %}://{{ etcdConfig.name }}.{{ cluster.name }}.internal:{{ etcdConfig.clientPorts[0] }}
 etcd_cafile: /etc/etcd/ssl/client-ca.pem
-etcd_certfile: /etc/etcd/ssl/client.pem
-etcd_keyfile: /etc/etcd/ssl/client-key.pem
+etcd_certfile: /etc/etcd/ssl/client-certfile.pem
+etcd_keyfile: /etc/etcd/client-keyfile.pem
+{% else %}
+endpoint: {{ locksmith.endpoint }}
+etcd_cafile: {{ locksmith.etcdCafile }}
+etcd_certfile: {{ locksmith.etcdCertfile }}
+etcd_keyfile: {{ locksmith.etcdKeyfile }}
+{%   endif %}{# locksmith.etcdConfig is defined #}
+{% endif %}{# if node.osConfig.locksmith is defined #}

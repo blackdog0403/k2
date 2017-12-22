@@ -6,17 +6,42 @@
 #
 #   kubernetes_minor_versions
 #
-- name:
+- name: "Calculating total nodes expected"
   set_fact:
     kubernetes_minor_version: "{{ kubernetes_minor_versions[cluster.name] }}"
     kubectl: "/opt/cnct/kubernetes/{{ kubernetes_minor_version }}/bin/kubectl"
     needed_nodes: "{{ cluster | expected_nodes(readiness_type, readiness_value) }}"
     retry_interval: 10
 
-- name: Get all nodes
+- name: Output expectations
+  debug:
+    msg: >-
+      Expect {{ needed_nodes }} nodes in cluster {{cluster.name}} with readiness type(value)
+      {{ readiness_type }}({{ readiness_value }}).
+    verbosity: 0
+
+- name: Wait for all nodes to join cluster (any status)
   command: >
-    {{ kubectl }} --kubeconfig={{ kubeconfig | expanduser }} get nodes --no-headers=true
+    {{ kubectl }} --kubeconfig={{ kubeconfig }} get nodes --no-headers=true --v 7
   register: job_get_nodes_result
   until: job_get_nodes_result.stdout_lines | length >= needed_nodes | int
   retries: "{{ (( readiness_wait | int ) / retry_interval | int ) | int }}"
   delay: "{{ retry_interval }}"
+  when: not wait_for_all_hosts
+  changed_when: false
+
+
+- name: Wait for all nodes to join cluster (status Ready)
+  shell: >
+    {{ kubectl }} --kubeconfig={{ kubeconfig }} get nodes --no-headers=true --v 7 | grep -v NotReady
+  register: job_get_nodes_result
+  until: job_get_nodes_result.stdout_lines | length >= needed_nodes | int
+  retries: "{{ (( readiness_wait | int ) / retry_interval | int ) | int }}"
+  delay: "{{ retry_interval }}"
+  when: wait_for_all_hosts
+  changed_when: false
+
+- name: Display results
+  debug:
+    var: job_get_nodes_result
+    verbosity: 0

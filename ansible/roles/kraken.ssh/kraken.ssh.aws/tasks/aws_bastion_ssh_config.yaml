@@ -1,0 +1,14 @@
+---
+- name: Generate bastion ssh inventory
+  template:
+    src: bastion_ssh_config.jinja2
+    dest: "{{ config_base }}/{{ cluster.name }}/bastion_ssh_config"
+  register: bastion_ssh_config_file
+
+- name: "Send bastion_ssh_config to bastion coreos hosts"
+  command: "scp -F {{ config_base }}/{{ cluster.name }}/ssh_config {{ config_base }}/{{ cluster.name }}/bastion_ssh_config {{ node.name }}-{{ item }}:.ssh/config"
+  with_sequence: start=1 end="{{ node.count }}"
+  retries: 60
+  delay: 5
+  when: ssh_config_file.changed or bastion_ssh_config_file.changed
+  ignore_errors: true

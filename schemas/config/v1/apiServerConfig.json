@@ -3,11 +3,16 @@
   "id": "http://judkins.house/apis/k2/v1/apiServerConfig.json",
   "$$target": "apiServerConfig.json",
   "title": "Kubernetes API server configuration",
-  "description": "kvStore (e.g. etcd) for API servers",
+  "description": "API Server properties such as the state kvStore (e.g. etcd) or flags",
 
   "properties": {
     "name": {
       "description": "Name of the API server configuration",
+      "type": "string"
+    },
+    "kind": {
+      "description": "Type of apiServer",
+      "enum": ["apiServer"],
       "type": "string"
     },
     "loadBalancer": {
@@ -15,11 +20,19 @@
       "enum": ["cloud", "flipbit"],
       "type": "string"
     },
+    "loadBalancerConfigs": {
+      "description": "Further configuration options for the load balancer.",
+      "$ref": "awsLoadBalancerConfig.json"
+    },
     "state": {
       "etcd": { "$ref": "kvStoreConfig.json" }
     },
     "events": {
       "etcd": { "$ref": "kvStoreConfig.json" }
+    },
+    "flags": {
+      "description": "Flags that we allow to change for a kraken cluster",
+      "$ref": "apiServerFlags.json"
     }
   },
   "required": [
@@ -28,5 +41,6 @@
     "state",
     "events"
   ],
+  "additionalProperties": false,
   "type": "object"
 }

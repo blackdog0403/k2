@@ -13,11 +13,10 @@
     "flannel": { "$ref": "canalFabricContainerConfig.json" }
   },
   "required": [
-    "kubePolicyController",
-    "etcd",
     "calicoCni",
     "calicoNode",
     "flannel"
   ],
+  "additionalProperties": false,
   "type": "object"
 }

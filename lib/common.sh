@@ -4,15 +4,21 @@
 #author          :Samsung SDSRA
 #==============================================================================
 
-my_dir=$(dirname "${BASH_SOURCE}")
-
 # set KRAKEN_ROOT to absolute path for use in other scripts
 readonly KRAKEN_ROOT=$(cd "${my_dir}/.."; pwd)
+
 KRAKEN_FORCE=${KRAKEN_FORCE:-false}
 KRAKEN_VERBOSE=${KRAKEN_VERBOSE:-false}
 K2_VERBOSE=''
 KRAKEN_TF_LOG=k2_tf_debug.log
+VERBOSE=false
+POSITIONAL=()
+KRAKEN_HELP=false
+
 UPDATE_NODEPOOLS=''
+ADD_NODEPOOLS=''
+REMOVE_NODEPOOLS=''
+K8S_ENDPOINT=''
 
 # set RANDFILE to prevent creation of ${HOME}/.rnd by openssl
 export RANDFILE=$(mktemp)
@@ -35,16 +41,24 @@ function run_command {
 }
 
 function generate_config {
-  inf "Generating config file at: $1"
+  inf "Generating $2 config file at: $1"
   mkdir -p "${1%/*}"
-  cp "${KRAKEN_ROOT}/ansible/roles/kraken.config/files/config.yaml" "${1}"
+
+  if [ ${2} == "AWS" ]; then
+      cp "${KRAKEN_ROOT}/ansible/roles/kraken.config/files/config.yaml" "${1}"
+  fi
+
+  if [ ${2} == "GKE" ]; then
+      cp "${KRAKEN_ROOT}/ansible/roles/kraken.config/files/gke-config.yaml" "${1}"
+  fi
+
   exit 0
 }
 
 function show_help {
   inf "Usage: \n"
-  inf "[up|down].sh --generate <path to file> - Generate a sensible defaults config at <path to file>"
-  inf "[up|down].sh --output <path to cluster state output> --config <path to cluster config file> --tags <only run roles tagged with>"
+  inf "[up|down].sh --generate [<path to file>] - Generate a sensible defaults config at <path to file>"
+  inf "[up|down].sh [--output <path to cluster state output>] [--config <path to cluster config file>] [--tags <only run roles tagged with>] [--verbose]"
   inf "[update].sh --nodepools <comma,separated,nodepools>"
 
   inf "\nFor example:"
@@ -53,7 +67,6 @@ function show_help {
   inf ""
   inf "[up].sh --output \${HOME}/.kraken/myclusterstate --config \${HOME}/.kraken/myclusterconfig.yaml --tags config,services"
   inf "[up].sh --config \${HOME}/.kraken/myclusterconfig.yaml"
-
 }
 
 function show_post_cluster {
@@ -71,7 +84,6 @@ function show_post_cluster {
       inf "For example: \nssh masterNodes-3 -F ${KRAKEN_BASE}/krakenCluster/ssh_config"
   fi
 }
-
 
 function show_post_cluster_error {
   warn "Some of the cluster state MAY be available:"
@@ -136,99 +148,7 @@ function crash_test_update {
   exit $RESULT
 }
 
-
-
 function control_c() {
   warn "Interrupted!"
   show_post_cluster_error
 }
-
-while [[ $# -gt 0 ]]
-do
-key="$1"
-
-case $key in
-  -c|--config)
-  KRAKEN_CONFIG="$2"
-  shift
-  ;;
-  -f|--force)
-  KRAKEN_FORCE=true
-  ;;
-  -n|--nodepools)
-  UPDATE_NODEPOOLS="$2"
-  shift
-  ;;
-  -g|--generate)
-  KRAKEN_GENERATE_PATH="${2-"${HOME}/.kraken/config.yaml"}"
-  if [ -n "${2+x}" ]; then
-    shift
-  fi
-  ;;
-  -o|--output)
-  KRAKEN_BASE="$2"
-  shift
-  ;;
-  -t|--tags)
-  KRAKEN_TAGS="$2"
-  shift
-  ;;
-  -v|--verbose)
-  K2_VERBOSE="$2"
-  shift
-  ;;
-  -h|--help)
-  KRAKEN_HELP=true
-  ;;
-  *)
-  KRAKEN_HELP=true
-  ;;
-esac
-shift # past argument or value
-done
-
-if [ -n "${KRAKEN_HELP+x}" ]; then
-  show_help
-  exit 0
-fi
-
-if [ -n "${KRAKEN_GENERATE_PATH+x}" ]; then
-  generate_config "${KRAKEN_GENERATE_PATH}"
-fi
-
-if [ -z ${KRAKEN_CONFIG+x} ]; then
-  warn "--config not specified. Using ${HOME}/.kraken/config.yaml as location"
-  KRAKEN_CONFIG="${HOME}/.kraken/config.yaml"
-fi
-
-if [ -z ${KRAKEN_BASE+x} ]; then
-  warn "--output not specified. Using ${HOME}/.kraken as location"
-  KRAKEN_BASE="${HOME}/.kraken"
-fi
-
-if [ -z ${KRAKEN_TAGS+x} ]; then
-  KRAKEN_TAGS="all"
-  warn "$KRAKEN_TAGS not specified. Using 'all' as tags"
-else
-  warn "Using '${KRAKEN_TAGS}' as tags "
-fi
-
-if [[ ${KRAKEN_TAGS} == *dryrun* ]]; then
-    KRAKEN_DRYRUN=true
-else
-    KRAKEN_DRYRUN=false
-fi
-
-KRAKEN_EXTRA_VARS="config_path=${KRAKEN_CONFIG} config_base=${KRAKEN_BASE} \
-                   config_forced=${KRAKEN_FORCE} dryrun=${KRAKEN_DRYRUN} \
-                   update_nodepools=${UPDATE_NODEPOOLS} \
-                  "
-
-if [ ! -z ${BUILD_TAG+x} ]; then
-    K2_VERBOSE='-vvv'
-fi
-
-if [ ! -z ${K2_VERBOSE+x} ]; then
-   TF_LOG_PATH="${KRAKEN_ROOT}/${KRAKEN_TF_LOG}"
-   TF_LOG=DEBUG
-fi
